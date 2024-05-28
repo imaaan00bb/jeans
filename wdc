@@ -1,69 +1,100 @@
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
+-- Flying Script with WASD Controls, Toggleable with X
+local player = game.Players.LocalPlayer
+local userInputService = game:GetService("UserInputService")
+local runService = game:GetService("RunService")
 
-local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-local hrp = character:WaitForChild("HumanoidRootPart")
+local flying = false
+local speed = 50 -- Adjust the flying speed as needed
+local bodyGyro, bodyVelocity
+local flyingConnection
 
-local extraStuds = 2
-local stepInterval = 0.1
+local function startFlying()
+    if not flying then
+        flying = true
 
--- Set the JumpPower to 60
-humanoid.JumpPower = 60
+        -- Enable flying
+        local character = player.Character
+        if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+        character.Humanoid.PlatformStand = true
 
-local movingKeys = {
-    [Enum.KeyCode.W] = false,
-    [Enum.KeyCode.A] = false,
-    [Enum.KeyCode.S] = false,
-    [Enum.KeyCode.D] = false
-}
+        -- Create BodyGyro
+        bodyGyro = Instance.new("BodyGyro")
+        bodyGyro.Parent = character.HumanoidRootPart
+        bodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+        bodyGyro.P = 9e4
+        bodyGyro.CFrame = character.HumanoidRootPart.CFrame
 
-local function isMoving()
-    for _, moving in pairs(movingKeys) do
-        if moving then
-            return true
+        -- Create BodyVelocity
+        bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.Parent = character.HumanoidRootPart
+        bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+
+        -- Flying loop
+        flyingConnection = runService.Heartbeat:Connect(function()
+            if flying then
+                local moveDirection = Vector3.new(0, 0, 0)
+                if userInputService:IsKeyDown(Enum.KeyCode.W) then
+                    moveDirection = moveDirection + workspace.CurrentCamera.CFrame.LookVector
+                end
+                if userInputService:IsKeyDown(Enum.KeyCode.S) then
+                    moveDirection = moveDirection - workspace.CurrentCamera.CFrame.LookVector
+                end
+                if userInputService:IsKeyDown(Enum.KeyCode.A) then
+                    moveDirection = moveDirection - workspace.CurrentCamera.CFrame.RightVector
+                end
+                if userInputService:IsKeyDown(Enum.KeyCode.D) then
+                    moveDirection = moveDirection + workspace.CurrentCamera.CFrame.RightVector
+                end
+                if userInputService:IsKeyDown(Enum.KeyCode.Space) then
+                    moveDirection = moveDirection + Vector3.new(0, 1, 0)
+                end
+                if userInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+                    moveDirection = moveDirection - Vector3.new(0, 1, 0)
+                end
+
+                -- Update BodyVelocity and BodyGyro
+                bodyVelocity.Velocity = moveDirection * speed
+                bodyGyro.CFrame = workspace.CurrentCamera.CFrame
+            end
+        end)
+    end
+end
+
+local function stopFlying()
+    if flying then
+        flying = false
+
+        -- Disable flying
+        local character = player.Character
+        if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+        character.Humanoid.PlatformStand = false
+
+        -- Destroy BodyGyro and BodyVelocity
+        if bodyGyro then
+            bodyGyro:Destroy()
+            bodyGyro = nil
+        end
+        if bodyVelocity then
+            bodyVelocity:Destroy()
+            bodyVelocity = nil
+        end
+
+        -- Disconnect flying connection
+        if flyingConnection then
+            flyingConnection:Disconnect()
+            flyingConnection = nil
         end
     end
-    return false
 end
 
-local function onMove()
-    if character and hrp then
-        local forward = hrp.CFrame.lookVector
-        hrp.CFrame = hrp.CFrame + forward * extraStuds
-    end
-end
-
-local function onInputBegan(input, gameProcessed)
-    if input.UserInputType == Enum.UserInputType.Keyboard and not gameProcessed then
-        local key = input.KeyCode
-        if movingKeys[key] ~= nil then
-            movingKeys[key] = true
-        end
-    end
-end
-
-local function onInputEnded(input, gameProcessed)
-    if input.UserInputType == Enum.UserInputType.Keyboard and not gameProcessed then
-        local key = input.KeyCode
-        if movingKeys[key] ~= nil then
-            movingKeys[key] = false
-        end
-    end
-end
-
-local lastMoveTime = 0
-RunService.RenderStepped:Connect(function(deltaTime)
-    if isMoving() then
-        local currentTime = tick()
-        if currentTime - lastMoveTime >= stepInterval then
-            onMove()
-            lastMoveTime = currentTime
+-- Keybind to start and stop flying
+userInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.KeyCode == Enum.KeyCode.X and not gameProcessed then
+        if flying then
+            stopFlying()
+        else
+            startFlying()
         end
     end
 end)
-
-UserInputService.InputBegan:Connect(onInputBegan)
-UserInputService.InputEnded:Connect(onInputEnded)
